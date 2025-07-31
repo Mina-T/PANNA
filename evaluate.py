@@ -12,16 +12,17 @@ import logging
 import os
 import time
 import numpy as np
+import sys
 
 from panna.lib.log import emit_splash_screen
 from panna.neuralnet.config_parser_train import parameter_file_parser
 from panna.neuralnet.config_parser_validation import parse_validation_config
 from panna.neuralnet.checkpoint import ModelFile
 from panna.neuralnet.panna_model import create_panna_model
-from panna.neuralnet.LongRange_electrostatic_model import create_panna_model_with_electrostatics
+#from panna.neuralnet.LongRange_electrostatic_model import create_panna_model_with_electrostatics
 
 logger = logging.getLogger('panna')
-
+sys.path.insert(0, '/leonardo/home/userexternal/mtaleblo/panna_jax_release/panna_code/src')
 
 def _filter_model_files(output_folder, model_files):
     """Filter already evaluated models."""
@@ -45,6 +46,9 @@ def _prepare_model(model_params, model_file, dummy_batch):
     else:
         panna_model = create_panna_model(model_params)
     _ = panna_model(dummy_batch)
+    #if hasattr(panna_model, "layer_inputs"):
+     #   np.save("descriptors_dummy_batch.npy", panna_model.layer_inputs.numpy())
+      #  print('npy saved', flush = True)
     panna_model.load_weights(model_file.file_name)
     return panna_model
 
@@ -184,14 +188,29 @@ def run_eval(model_params, model_files, dataset, output_folder):
 
     n_models = len(model_files)
     dummy_batch = next(iter(dataset))
-
+    #print('dummy_batch: ', dummy_batch, flush = True)
     logger.info('----start evaluation----')
+    #all_descriptors = []
     for idx, model_file in enumerate(model_files):
         logger.info('validating network: %d/%d, epoch: %d step: %d', idx + 1, n_models,
                     model_file.epoch, model_file.step)
         model = _prepare_model(model_params, model_file, dummy_batch)
+        #gvecs = model.layer_inputs.numpy()
+        #all_descriptors.append(gvecs)
         tt = time.time()
         out = model.predict(dataset, use_multiprocessing=True)
+        all_descriptors = []
+        all_names = []
+        for batch in dataset:
+            _, _, _, names = model.predict_step(batch)
+            gvecs = model.layer_inputs.numpy()
+            print('gvecs shape: ', gvecs.shape,  flush = True)
+            print('names: ', names,  flush = True)
+            for i in range(gvecs.shape[0]):
+                desc = gvecs[i][~np.all(gvecs[i] == 0, axis=1)]
+                all_descriptors.append(desc)
+                all_names.extend([n.decode("utf-8") for n in names.numpy()])
+        np.savez("descriptors_test_set.npz", names=all_names, descriptors=all_descriptors)
         tt = (time.time() - tt) * 1000
         logger.info(f'eval time = {tt/1000:2.2f} s')
 
