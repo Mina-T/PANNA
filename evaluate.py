@@ -211,6 +211,7 @@ def run_eval(model_params, model_files, dataset, output_folder):
                 all_descriptors.append(desc)
                 all_names.extend([n.decode("utf-8") for n in names.numpy()])
         np.savez("descriptors_test_set.npz", names=all_names, descriptors=all_descriptors)
+        
         tt = (time.time() - tt) * 1000
         logger.info(f'eval time = {tt/1000:2.2f} s')
 
